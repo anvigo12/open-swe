@@ -31,6 +31,7 @@ import { Route as AgentsWorkspacesRouteImport } from './routes/agents_.workspace
 import { Route as IncidentsIndexRouteImport } from './routes/incidents/index'
 import { Route as IncidentsIncidentIdRouteImport } from './routes/incidents/$incidentId'
 import { Route as ReviewStylesRouteImport } from './routes/review_.styles'
+import { Route as WorkspacesSlugRouteImport } from './routes/workspaces_.$slug'
 import { Route as AgentsThreadIdPlanRouteImport } from './routes/agents/$threadId_.plan'
 import { Route as AgentsAutomationsIndexRouteImport } from './routes/agents/automations/index'
 import { Route as AgentsAutomationsScheduleIdRouteImport } from './routes/agents/automations/$scheduleId'
@@ -151,6 +152,11 @@ const ReviewStylesRoute = ReviewStylesRouteImport.update({
   path: '/review/styles',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspacesSlugRoute = WorkspacesSlugRouteImport.update({
+  id: '/workspaces_/$slug',
+  path: '/workspaces/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentsThreadIdPlanRoute = AgentsThreadIdPlanRouteImport.update({
   id: '/$threadId_/plan',
   path: '/$threadId/plan',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/agents/workspaces': typeof AgentsWorkspacesRoute
   '/incidents/$incidentId': typeof IncidentsIncidentIdRoute
   '/review/styles': typeof ReviewStylesRoute
+  '/workspaces/$slug': typeof WorkspacesSlugRoute
   '/agents/': typeof AgentsIndexRoute
   '/incidents/': typeof IncidentsIndexRoute
   '/agents/$threadId/plan': typeof AgentsThreadIdPlanRoute
@@ -251,6 +258,7 @@ export interface FileRoutesByTo {
   '/agents/workspaces': typeof AgentsWorkspacesRoute
   '/incidents/$incidentId': typeof IncidentsIncidentIdRoute
   '/review/styles': typeof ReviewStylesRoute
+  '/workspaces/$slug': typeof WorkspacesSlugRoute
   '/agents': typeof AgentsIndexRoute
   '/incidents': typeof IncidentsIndexRoute
   '/agents/$threadId/plan': typeof AgentsThreadIdPlanRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/agents_/workspaces': typeof AgentsWorkspacesRoute
   '/incidents/$incidentId': typeof IncidentsIncidentIdRoute
   '/review_/styles': typeof ReviewStylesRoute
+  '/workspaces_/$slug': typeof WorkspacesSlugRoute
   '/agents/': typeof AgentsIndexRoute
   '/incidents/': typeof IncidentsIndexRoute
   '/agents/$threadId_/plan': typeof AgentsThreadIdPlanRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/agents/workspaces'
     | '/incidents/$incidentId'
     | '/review/styles'
+    | '/workspaces/$slug'
     | '/agents/'
     | '/incidents/'
     | '/agents/$threadId/plan'
@@ -351,6 +361,7 @@ export interface FileRouteTypes {
     | '/agents/workspaces'
     | '/incidents/$incidentId'
     | '/review/styles'
+    | '/workspaces/$slug'
     | '/agents'
     | '/incidents'
     | '/agents/$threadId/plan'
@@ -384,6 +395,7 @@ export interface FileRouteTypes {
     | '/agents_/workspaces'
     | '/incidents/$incidentId'
     | '/review_/styles'
+    | '/workspaces_/$slug'
     | '/agents/'
     | '/incidents/'
     | '/agents/$threadId_/plan'
@@ -414,6 +426,7 @@ export interface RootRouteChildren {
   AgentsSandboxRoute: typeof AgentsSandboxRoute
   AgentsWorkspacesRoute: typeof AgentsWorkspacesRoute
   ReviewStylesRoute: typeof ReviewStylesRoute
+  WorkspacesSlugRoute: typeof WorkspacesSlugRoute
   ReviewRepositoriesOwnerRoute: typeof ReviewRepositoriesOwnerRoute
   OwnerRepoPullNumberRoute: typeof OwnerRepoPullNumberRoute
 }
@@ -574,6 +587,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewStylesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workspaces_/$slug': {
+      id: '/workspaces_/$slug'
+      path: '/workspaces/$slug'
+      fullPath: '/workspaces/$slug'
+      preLoaderRoute: typeof WorkspacesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agents/$threadId_/plan': {
       id: '/agents/$threadId_/plan'
       path: '/$threadId/plan'
@@ -702,6 +722,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsSandboxRoute: AgentsSandboxRoute,
   AgentsWorkspacesRoute: AgentsWorkspacesRoute,
   ReviewStylesRoute: ReviewStylesRoute,
+  WorkspacesSlugRoute: WorkspacesSlugRoute,
   ReviewRepositoriesOwnerRoute: ReviewRepositoriesOwnerRoute,
   OwnerRepoPullNumberRoute: OwnerRepoPullNumberRoute,
 }
