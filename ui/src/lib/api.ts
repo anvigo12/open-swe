@@ -499,6 +499,12 @@ export interface SlackChannelOption {
   num_members: number | null
 }
 
+/** The channel directory; partial when Slack rate limited the walk over public channels. */
+export interface SlackChannelDirectory {
+  channels: Array<SlackChannelOption>
+  partial: boolean
+}
+
 export interface WorkspaceOptionList {
   workspaces: Array<WorkspaceOption>
   default_slug: string
@@ -906,7 +912,7 @@ export const api = {
       `/team-settings?workspace=${encodeURIComponent(workspace)}`
     ),
   listSlackBots: () => request<SlackBotOption[]>("/slack/bots"),
-  listSlackChannels: () => request<SlackChannelOption[]>("/slack/channels"),
+  listSlackChannels: () => request<SlackChannelDirectory>("/slack/channels"),
   listAllowedSlackBots: () => request<AllowedSlackBot[]>("/slack/allowed-bots"),
   allowSlackBot: (body: { bot_id: string }) =>
     request<AllowedSlackBot>("/slack/allowed-bots", {
