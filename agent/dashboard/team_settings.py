@@ -35,6 +35,38 @@ logger = logging.getLogger(__name__)
 
 TEAM_SETTINGS_NAMESPACE: list[str] = ["team_settings"]
 
+# Model defaults are configured once per installation, on the ``default``
+# workspace's record; every other workspace reads them from there. The rest of
+# a record (review, gateway, Fable, guidelines, default repository) is its own.
+INSTANCE_MODEL_FIELDS: frozenset[str] = frozenset(
+    {
+        "model_routing_enabled",
+        "default_agent_model",
+        "default_agent_reasoning_effort",
+        "default_agent_subagent_model",
+        "default_agent_subagent_reasoning_effort",
+        "default_agent_routing_fast_model",
+        "default_agent_routing_fast_reasoning_effort",
+        "default_agent_routing_fast_alt_model",
+        "default_agent_routing_fast_alt_reasoning_effort",
+        "default_agent_routing_fast_alt_probability",
+        "default_agent_routing_balanced_model",
+        "default_agent_routing_balanced_reasoning_effort",
+        "default_agent_routing_performance_model",
+        "default_agent_routing_performance_reasoning_effort",
+        "default_reviewer_model",
+        "default_reviewer_reasoning_effort",
+        "default_reviewer_subagent_model",
+        "default_reviewer_subagent_reasoning_effort",
+        "default_grouping_model",
+        "default_grouping_reasoning_effort",
+        "default_chat_model",
+        "default_chat_reasoning_effort",
+        "default_thread_title_model",
+        "default_thread_title_reasoning_effort",
+    }
+)
+
 # Cap the org-wide guidelines so a runaway value can't dominate the reviewer
 # prompt. Generous enough for a detailed policy, small enough to stay bounded.
 ORG_GUIDELINES_MAX_CHARS = 10_000
@@ -371,30 +403,54 @@ def resolve_settings_workspace(explicit: str | None = None) -> str:
         return DEFAULT_WORKSPACE_SLUG
 
 
+def _overlay(
+    record: Mapping[str, Any] | None, fields: frozenset[str], *, keep: bool
+) -> dict[str, Any]:
+    """The record's ``fields`` (or everything but them) that override a default.
+
+    None-valued model fields are skipped so legacy records (or PUTs that cleared
+    the selection) still surface the hardcoded default instead of a null, but an
+    explicit 0 fast_alt probability stays: zero is a valid "experiment off".
+    """
+    if not record:
+        return {}
+    return {
+        k: v
+        for k, v in record.items()
+        if (k in fields) == keep
+        and (v is not None or k == "default_agent_routing_fast_alt_probability")
+    }
+
+
 async def get_team_settings(workspace: str | None = None) -> dict[str, Any]:
-    """The team record merged over the hardcoded defaults.
+    """The workspace's record merged over the hardcoded defaults.
+
+    Model defaults come from the ``default`` workspace's record whatever
+    ``workspace`` is; see :data:`INSTANCE_MODEL_FIELDS`.
 
     Fail-soft on purpose: the agent, the reviewer, and every webhook read this
     to pick a model, so an unreachable store must degrade to the defaults
     rather than fail every run at once.
     """
     defaults = _default_settings()
+    slug = resolve_settings_workspace(workspace)
     try:
-        value = await get_value(TEAM_SETTINGS_NAMESPACE, resolve_settings_workspace(workspace))
+        value = await get_value(TEAM_SETTINGS_NAMESPACE, slug)
+        instance = (
+            value
+            if slug == DEFAULT_WORKSPACE_SLUG
+            else await get_value(TEAM_SETTINGS_NAMESPACE, DEFAULT_WORKSPACE_SLUG)
+        )
     except Exception:
         logger.warning("team settings lookup failed; using defaults", exc_info=True)
         return defaults
-    if value is None:
+    if value is None and instance is None:
         return defaults
-    # Skip None-valued model fields so legacy records (or PUTs that cleared the
-    # selection) still surface the hardcoded default instead of a null, but keep
-    # an explicit 0 fast_alt probability: zero is a valid "experiment off".
-    overlay = {
-        k: v
-        for k, v in value.items()
-        if v is not None or k == "default_agent_routing_fast_alt_probability"
+    merged = {
+        **defaults,
+        **_overlay(value, INSTANCE_MODEL_FIELDS, keep=False),
+        **_overlay(instance, INSTANCE_MODEL_FIELDS, keep=True),
     }
-    merged = {**defaults, **overlay}
     for stale_field in (
         "trigger_mode",
         "autofix_mode",
@@ -411,6 +467,12 @@ async def get_team_settings(workspace: str | None = None) -> dict[str, Any]:
 async def upsert_team_settings(
     update: TeamSettingsUpdate, workspace: str | None = None
 ) -> dict[str, Any]:
+    """Replace the workspace's record and return what a read now sees.
+
+    Model defaults in ``update`` only take effect on the ``default`` workspace;
+    for any other workspace they are dropped, since every workspace reads them
+    from the instance record.
+    """
     value: dict[str, Any] = {
         "review_draft_prs": update.review_draft_prs,
         "pr_summaries": update.pr_summaries,
@@ -449,8 +511,12 @@ async def upsert_team_settings(
         "default_thread_title_reasoning_effort": update.default_thread_title_reasoning_effort,
         "updated_at": now_iso(),
     }
-    await put_value(TEAM_SETTINGS_NAMESPACE, resolve_settings_workspace(workspace), value)
-    return value
+    slug = resolve_settings_workspace(workspace)
+    if slug != DEFAULT_WORKSPACE_SLUG:
+        # Only the instance record holds model defaults; a copy here would go stale.
+        value.update(dict.fromkeys(INSTANCE_MODEL_FIELDS))
+    await put_value(TEAM_SETTINGS_NAMESPACE, slug, value)
+    return await get_team_settings(slug)
 
 
 async def get_team_default_repo(workspace: str | None = None) -> dict[str, str] | None:

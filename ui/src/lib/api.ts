@@ -799,7 +799,7 @@ export interface ReviewerEvalStatus {
 
 export const api = {
   me: () => request<SessionUser>("/me"),
-  /** Model list and defaults for one workspace; model defaults are per workspace. */
+  /** Model list and defaults as seen from one workspace; its Fable flag gates the list. */
   options: (workspace: string = DEFAULT_WORKSPACE_SLUG) =>
     request<OptionsPayload>(
       `/options?workspace=${encodeURIComponent(workspace)}`

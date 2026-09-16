@@ -119,14 +119,10 @@ async def test_a_bound_channel_outranks_a_defaulted_repository(
 
 
 @_needs_workspace_rows
-async def test_the_vision_fallback_reads_the_resolved_workspaces_model(
+async def test_an_image_in_a_bound_channel_still_gets_the_vision_fallback(
     monkeypatch: pytest.MonkeyPatch, fake_store: FakeStore
 ) -> None:
-    """An image in a bound channel is checked against that workspace's model.
-
-    `default` here runs a model that takes images and `oss` one that does not,
-    so reading the wrong workspace's default would skip the fallback entirely.
-    """
+    """The instance model default is checked for image support in every workspace."""
     captured: dict[str, Any] = {}
     _setup_slack_mention_fakes(monkeypatch, captured)
 
@@ -154,17 +150,10 @@ async def test_the_vision_fallback_reads_the_resolved_workspaces_model(
     )
     await upsert_team_settings(
         TeamSettingsUpdate(
-            default_agent_model="anthropic:claude-opus-5",
-            default_agent_reasoning_effort="high",
-        ),
-        workspace="default",
-    )
-    await upsert_team_settings(
-        TeamSettingsUpdate(
             default_agent_model="fireworks:accounts/fireworks/models/kimi-k3",
             default_agent_reasoning_effort="high",
         ),
-        workspace="oss",
+        workspace="default",
     )
 
     request = SlackRequest.model_validate(

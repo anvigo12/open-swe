@@ -24,7 +24,7 @@ import { WorkspaceSandboxSection } from "./WorkspaceSandboxSection"
 import {
   FableSection,
   LLMGatewaySection,
-  WorkspaceDefaultsSection,
+  WorkspaceDefaultRepoSection,
 } from "./WorkspaceTeamSettingsSections"
 
 export const workspaceRecordKey = (slug: string) => ["workspace", slug] as const
@@ -122,12 +122,6 @@ export function WorkspaceSettings({
     queryFn: () => api.getWorkspace(slug),
   })
   const options = useWorkspaceOptions(true)
-  // Model options follow the workspace: the Fable flag that gates some of
-  // them is one of its settings.
-  const modelOptions = useQuery({
-    queryKey: ["options", slug],
-    queryFn: () => api.options(slug),
-  })
   const channelDirectory = useSlackChannelDirectory(canEdit)
   const channelLabel = (id: string) =>
     slackChannelLabel(channelDirectory.data, id)
@@ -163,11 +157,8 @@ export function WorkspaceSettings({
         record={record.data}
         onSaved={onSaved}
       />
-      <WorkspaceDefaultsSection
+      <WorkspaceDefaultRepoSection
         workspace={slug}
-        models={(modelOptions.data?.models ?? []).filter(
-          (model) => model.can_be_default !== false
-        )}
         repositories={record.data.repos}
       />
       <LLMGatewaySection workspace={slug} />

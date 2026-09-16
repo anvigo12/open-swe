@@ -5,11 +5,13 @@ from agent.dashboard import team_settings, team_settings_cache
 from agent.dashboard.options import FABLE_MODEL_IDS
 from agent.dashboard.options_routes import options
 from agent.dashboard.team_settings import (
+    TEAM_SETTINGS_NAMESPACE,
     TeamSettingsUpdate,
     get_team_settings,
     upsert_team_settings,
 )
 from agent.run_config import RunConfig
+from agent.store import put_value
 from tests.conftest import FakeStore
 
 
@@ -61,8 +63,50 @@ async def test_cached_reads_do_not_leak_across_workspaces(fake_store: FakeStore)
     ] == "internal only"
 
 
-async def test_options_report_the_requested_workspaces_defaults(fake_store: FakeStore) -> None:
-    """The composer's model picker is scoped to the workspace it composes in."""
+async def test_model_defaults_are_read_from_the_default_workspace(fake_store: FakeStore) -> None:
+    """Model defaults are one instance setting; a workspace cannot keep its own."""
+    await upsert_team_settings(
+        TeamSettingsUpdate(
+            default_agent_model="anthropic:claude-sonnet-5",
+            default_agent_reasoning_effort="high",
+            model_routing_enabled=True,
+        ),
+        workspace="default",
+    )
+    # A record written before model defaults became instance-wide.
+    await put_value(
+        TEAM_SETTINGS_NAMESPACE,
+        "oss",
+        {"default_agent_model": "openai:gpt-6-astra", "org_guidelines": "be public"},
+    )
+
+    oss = await get_team_settings("oss")
+    assert oss["default_agent_model"] == "anthropic:claude-sonnet-5"
+    assert oss["default_agent_reasoning_effort"] == "high"
+    assert oss["model_routing_enabled"] is True
+    assert oss["org_guidelines"] == "be public"
+    assert await team_settings_cache.cached_team_default_model("agent", "oss") == (
+        "anthropic:claude-sonnet-5",
+        "high",
+    )
+
+    # A PUT scoped to another workspace cannot move them either.
+    saved = await upsert_team_settings(
+        TeamSettingsUpdate(
+            default_agent_model="openai:gpt-6-astra",
+            default_agent_reasoning_effort="low",
+            org_guidelines="be public",
+        ),
+        workspace="oss",
+    )
+    assert saved["default_agent_model"] == "anthropic:claude-sonnet-5"
+    assert (await get_team_settings("oss"))["default_agent_model"] == "anthropic:claude-sonnet-5"
+
+
+async def test_options_report_instance_model_defaults_and_the_workspaces_fable_flag(
+    fake_store: FakeStore,
+) -> None:
+    """The composer's picker follows the workspace only where its settings differ."""
     await upsert_team_settings(
         TeamSettingsUpdate(
             default_agent_model="anthropic:claude-sonnet-5",
@@ -70,22 +114,15 @@ async def test_options_report_the_requested_workspaces_defaults(fake_store: Fake
         ),
         workspace="default",
     )
-    await upsert_team_settings(
-        TeamSettingsUpdate(
-            default_agent_model="openai:gpt-6-astra",
-            default_agent_reasoning_effort="low",
-            fable_enabled=True,
-        ),
-        workspace="oss",
-    )
+    await upsert_team_settings(TeamSettingsUpdate(fable_enabled=True), workspace="oss")
 
     scoped = await options(workspace="oss")
     unscoped = await options()
 
-    assert scoped["default_agent_model"] == "openai:gpt-6-astra"
-    assert scoped["default_agent_reasoning_effort"] == "low"
+    assert scoped["default_agent_model"] == "anthropic:claude-sonnet-5"
+    assert scoped["default_agent_reasoning_effort"] == "high"
     assert unscoped["default_agent_model"] == "anthropic:claude-sonnet-5"
-    # The Fable flag is per workspace as well, so the selectable list follows it.
+    # The Fable flag is per workspace, so the selectable list follows it.
     assert [m["id"] for m in scoped["models"] if m["id"] in FABLE_MODEL_IDS]
     assert not [m["id"] for m in unscoped["models"] if m["id"] in FABLE_MODEL_IDS]
 

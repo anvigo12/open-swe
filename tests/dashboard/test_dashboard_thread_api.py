@@ -336,10 +336,10 @@ async def test_enrich_run_start_command_stamps_workspace_from_repo_owner(
     assert created_metadata["workspace"] == "oss"
 
 
-async def test_enrich_run_start_command_resolves_model_from_repos_workspace(
+async def test_enrich_run_start_command_resolves_the_instance_model_default(
     monkeypatch, fake_store: FakeStore, registry_db
 ) -> None:
-    """A new thread's model default comes from the repo's own workspace, not `default`."""
+    """A thread in another workspace still runs the instance model default."""
     created: dict[str, object] = {}
 
     async def fake_profile(login: str) -> dict[str, object]:
@@ -391,8 +391,8 @@ async def test_enrich_run_start_command_resolves_model_from_repos_workspace(
     created_metadata = created["metadata"]
     assert isinstance(created_metadata, dict)
     assert created_metadata["workspace"] == "oss"
-    assert created_metadata["resolved_model"] == "openai:gpt-6-astra"
-    assert created_metadata["resolved_effort"] == "low"
+    assert created_metadata["resolved_model"] == "anthropic:claude-sonnet-5"
+    assert created_metadata["resolved_effort"] == "high"
 
 
 @pytest.mark.parametrize(

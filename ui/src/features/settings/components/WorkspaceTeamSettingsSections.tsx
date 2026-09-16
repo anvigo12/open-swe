@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { api } from "@/lib/api"
+import { api, DEFAULT_WORKSPACE_SLUG } from "@/lib/api"
 import { RepoSelector } from "@/features/settings/components/RepoSelector"
 
 type GatewayMode = "inherit" | "enabled" | "disabled"
@@ -150,16 +150,16 @@ export function FableSection({ workspace }: { workspace: string }) {
   )
 }
 
-export function WorkspaceDefaultsSection({
-  workspace,
+/**
+ * Instance-wide model defaults. They live on the `default` workspace's record
+ * and the backend serves them to every workspace from there.
+ */
+export function GlobalDefaultsSection({
   models,
-  repositories,
 }: {
-  workspace: string
   models: Array<ModelOption>
-  /** The workspace's own repositories; the default repository is one of them. */
-  repositories: Array<string>
 }) {
+  const workspace = DEFAULT_WORKSPACE_SLUG
   const settings = useQuery({
     queryKey: ["teamSettings", workspace],
     queryFn: () => api.getTeamSettings(workspace),
@@ -169,7 +169,7 @@ export function WorkspaceDefaultsSection({
   return (
     <SettingsSection
       title="Model defaults"
-      description="Models for runs in this workspace. Per-user Cloud Agent selections override the agent defaults."
+      description="Models for runs in every workspace. Per-user Cloud Agent selections override the agent defaults."
     >
       <div className="divide-y divide-border">
         <SettingsRow
@@ -292,27 +292,6 @@ export function WorkspaceDefaultsSection({
           }
           disabled={!settings.data || save.isPending}
         />
-        <SettingsRow
-          label="Default Repository"
-          description="Used when a run in this workspace has no explicit repository and the user has no profile default."
-          control={
-            <div className="w-56">
-              <RepoSelector
-                repos={repositories.map((full_name) => ({ full_name }))}
-                selectedRepo={settings.data?.default_repo ?? null}
-                onRepoChange={(repo) =>
-                  settings.data &&
-                  save.mutate({ ...settings.data, default_repo: repo })
-                }
-                placeholder="Pick a repository…"
-                emptySelectionLabel="No default repository"
-                triggerClassName="h-7 w-full max-w-none rounded-md border border-input bg-input/20 px-2 py-1.5 text-xs/relaxed text-foreground transition-colors hover:opacity-100 dark:bg-input/30"
-                dropdownClassName="w-56"
-                disabled={!settings.data || save.isPending}
-              />
-            </div>
-          }
-        />
         <RolePicker
           label="Open SWE Reviewer"
           description="Model used for PR review runs."
@@ -396,6 +375,55 @@ export function WorkspaceDefaultsSection({
             })
           }
           disabled={!settings.data || save.isPending}
+        />
+      </div>
+      {save.error && (
+        <p className="px-4 pb-3 text-xs text-destructive">{save.error}</p>
+      )}
+    </SettingsSection>
+  )
+}
+
+/** The workspace's own default repository, one of the repositories it owns. */
+export function WorkspaceDefaultRepoSection({
+  workspace,
+  repositories,
+}: {
+  workspace: string
+  repositories: Array<string>
+}) {
+  const settings = useQuery({
+    queryKey: ["teamSettings", workspace],
+    queryFn: () => api.getTeamSettings(workspace),
+  })
+  const save = useSaveTeamSettings(workspace)
+
+  return (
+    <SettingsSection
+      title="Default repository"
+      description="Where a run in this workspace lands when nothing names a repository."
+    >
+      <div className="divide-y divide-border">
+        <SettingsRow
+          label="Repository"
+          description="Used when a run in this workspace names no repository and the user has no profile default."
+          control={
+            <div className="w-56">
+              <RepoSelector
+                repos={repositories.map((full_name) => ({ full_name }))}
+                selectedRepo={settings.data?.default_repo ?? null}
+                onRepoChange={(repo) =>
+                  settings.data &&
+                  save.mutate({ ...settings.data, default_repo: repo })
+                }
+                placeholder="Pick a repository…"
+                emptySelectionLabel="No default repository"
+                triggerClassName="h-7 w-full max-w-none rounded-md border border-input bg-input/20 px-2 py-1.5 text-xs/relaxed text-foreground transition-colors hover:opacity-100 dark:bg-input/30"
+                dropdownClassName="w-56"
+                disabled={!settings.data || save.isPending}
+              />
+            </div>
+          }
         />
       </div>
       {save.error && (

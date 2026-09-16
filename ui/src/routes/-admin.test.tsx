@@ -14,7 +14,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { api, type TeamSettings } from "@/lib/api"
 
 import { SlackIntegrationSection } from "./admin"
-import { FableSection } from "@/features/settings/components/WorkspaceTeamSettingsSections"
+import {
+  FableSection,
+  GlobalDefaultsSection,
+} from "@/features/settings/components/WorkspaceTeamSettingsSections"
 
 afterEach(cleanup)
 
@@ -123,6 +126,45 @@ describe("FableSection", () => {
     )
     await waitFor(() =>
       expect(qc.getQueryData(["teamSettings", "beta"])).toEqual(settings(false))
+    )
+  })
+})
+
+describe("GlobalDefaultsSection", () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it("saves model defaults on the instance's default workspace", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    const settings: TeamSettings = {
+      review_draft_prs: false,
+      pr_summaries: true,
+      review_trace_links: true,
+      model_routing_enabled: false,
+    }
+    vi.spyOn(api, "getTeamSettings").mockResolvedValue(settings)
+    const saveTeamSettings = vi
+      .spyOn(api, "saveTeamSettings")
+      .mockResolvedValue({ ...settings, model_routing_enabled: true })
+
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <GlobalDefaultsSection models={[]} />
+      </QueryClientProvider>
+    )
+
+    // Adaptive model routing is the section's only switch; it stays disabled
+    // until the settings load.
+    const toggle = await within(view.container).findByRole("switch")
+    await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false))
+    fireEvent.click(toggle)
+
+    await waitFor(() =>
+      expect(saveTeamSettings).toHaveBeenCalledWith(
+        { ...settings, model_routing_enabled: true },
+        "default"
+      )
     )
   })
 })

@@ -27,12 +27,15 @@ import {
 } from "@/lib/slack-manifest"
 import { dashboardApiBase } from "@/lib/api-base"
 import { AllowedSlackBotsSection } from "@/features/settings/components/AllowedSlackBotsSection"
+import { GlobalDefaultsSection } from "@/features/settings/components/WorkspaceTeamSettingsSections"
+import { useOptions } from "@/lib/profile"
 import { IncidentSettings } from "@/features/incidents/IncidentSettings"
 
 export const Route = createFileRoute("/admin")({ component: AdminPage })
 
 function AdminPage() {
   const session = useSession()
+  const modelOptions = useOptions()
 
   if (session.isLoading) {
     return (
@@ -48,15 +51,21 @@ function AdminPage() {
     <AppShell
       user={session.data}
       title="Admin"
-      description="Instance-wide integrations and user mappings. Per-workspace settings live with each workspace."
+      description="Instance-wide model defaults, integrations, and user mappings. Per-workspace settings live with each workspace."
     >
       <SettingsSection title="Workspaces">
         <SettingsNavRow
           to="/workspaces"
           label="Workspace settings"
-          description="Repositories, Slack channels, sandbox image, model defaults, MCP connections, and review settings, per workspace."
+          description="Repositories, Slack channels, sandbox image, default repository, MCP connections, and review settings, per workspace."
         />
       </SettingsSection>
+
+      <GlobalDefaultsSection
+        models={(modelOptions.data?.models ?? []).filter(
+          (model) => model.can_be_default !== false
+        )}
+      />
 
       <SlackIntegrationSection
         backendUrl={session.data.slack_base_url ?? session.data.api_base_url}
