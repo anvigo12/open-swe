@@ -78,6 +78,8 @@ function AdminPage() {
 
       <LLMGatewaySection />
 
+      <ModelIdentitySection />
+
       <FableSection />
 
       <ExpeditedReviewSection />
@@ -465,18 +467,26 @@ function UsersSection({ enabled }: { enabled: boolean }) {
   )
 }
 
-type GatewayMode = "inherit" | "enabled" | "disabled"
+type TriState = "inherit" | "enabled" | "disabled"
 
-function gatewayMode(value: boolean | null | undefined): GatewayMode {
+function triStateMode(value: boolean | null | undefined): TriState {
   if (value === true) return "enabled"
   if (value === false) return "disabled"
   return "inherit"
 }
 
-function gatewayModeValue(mode: GatewayMode): boolean | null {
+function triStateValue(mode: TriState): boolean | null {
   if (mode === "enabled") return true
   if (mode === "disabled") return false
   return null
+}
+
+type GatewayMode = TriState
+
+const gatewayMode = triStateMode
+
+function gatewayModeValue(mode: GatewayMode): boolean | null {
+  return triStateValue(mode)
 }
 
 function LLMGatewaySection() {
@@ -528,6 +538,62 @@ function LLMGatewaySection() {
                 </SelectItem>
                 <SelectItem value="enabled">Enabled</SelectItem>
                 <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+      </div>
+      {error && <p className="px-4 pb-3 text-xs text-destructive">{error}</p>}
+    </SettingsSection>
+  )
+}
+
+function ModelIdentitySection() {
+  const qc = useQueryClient()
+  const settings = useQuery({
+    queryKey: ["teamSettings"],
+    queryFn: api.getTeamSettings,
+  })
+  const [error, setError] = useState<string | null>(null)
+
+  const save = useMutation({
+    mutationFn: (body: Partial<TeamSettings>) => api.saveTeamSettings(body),
+    onSuccess: (saved) => {
+      qc.setQueryData(["teamSettings"], saved)
+      qc.invalidateQueries({ queryKey: ["modelIdentity"] })
+      setError(null)
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+
+  const mode = triStateMode(settings.data?.show_model_identity)
+
+  return (
+    <SettingsSection
+      title="Model identity"
+      description="Name the model behind each run. Hidden workspaces show an anonymous auto selection; a manual model pick is always shown."
+    >
+      <div className="divide-y divide-border">
+        <SettingsRow
+          label="Show model identity"
+          description="Shown by default. Hidden or Inherited follow this instance default in every workspace; a workspace can override it in its own settings."
+          control={
+            <Select
+              value={mode}
+              onValueChange={(next) =>
+                save.mutate({
+                  show_model_identity: triStateValue(next as TriState),
+                })
+              }
+              disabled={!settings.data || save.isPending}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">Shown (default)</SelectItem>
+                <SelectItem value="enabled">Shown</SelectItem>
+                <SelectItem value="disabled">Hidden</SelectItem>
               </SelectContent>
             </Select>
           }

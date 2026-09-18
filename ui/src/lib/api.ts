@@ -203,6 +203,8 @@ export interface TeamSettings {
   review_draft_prs: boolean
   pr_summaries: boolean
   review_trace_links: boolean
+  /** Model identity toggle; undefined on a workspace record inherits the instance. */
+  show_model_identity?: boolean | null
   /** Tri-state adaptive model routing toggle; user preference overrides this org default. */
   model_routing_enabled?: boolean | null
   /** Tri-state LLM Gateway toggle; null inherits the LANGSMITH_GATEWAY_ENABLED default. */
@@ -233,6 +235,17 @@ export interface TeamSettings {
   default_thread_title_model?: string | null
   default_thread_title_reasoning_effort?: string | null
   updated_at?: string | null
+}
+
+/** A workspace's effective settings plus the fields its own record overrides. */
+export interface WorkspaceSettingsView {
+  effective: TeamSettings
+  overrides: Partial<TeamSettings>
+}
+
+export interface ModelIdentityVisibility {
+  show_model_identity: boolean
+  workspace: string
 }
 
 export interface MCPOAuth {
@@ -988,6 +1001,27 @@ export const api = {
   listWorkspaceOptions: () =>
     request<WorkspaceOptionList>("/workspaces/options"),
   getTeamSettings: () => request<TeamSettings>("/team-settings"),
+  getWorkspaceSettings: (workspace: string) =>
+    request<WorkspaceSettingsView>(
+      `/workspaces/${encodeURIComponent(workspace)}/settings`
+    ),
+  saveWorkspaceSettings: (workspace: string, body: Partial<TeamSettings>) =>
+    request<WorkspaceSettingsView>(
+      `/workspaces/${encodeURIComponent(workspace)}/settings`,
+      {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }
+    ),
+  getModelIdentity: (params: { workspace?: string; thread?: string }) => {
+    const search = new URLSearchParams()
+    if (params.workspace) search.set("workspace", params.workspace)
+    if (params.thread) search.set("thread", params.thread)
+    const qs = search.toString()
+    return request<ModelIdentityVisibility>(
+      `/model-identity${qs ? `?${qs}` : ""}`
+    )
+  },
   listSlackBots: () => request<SlackBotOption[]>("/slack/bots"),
   listAllowedSlackBots: () => request<AllowedSlackBot[]>("/slack/allowed-bots"),
   allowSlackBot: (body: { bot_id: string }) =>
@@ -1000,7 +1034,7 @@ export const api = {
       `/slack/allowed-bots/${encodeURIComponent(teamId)}/${encodeURIComponent(botId)}`,
       { method: "DELETE" }
     ),
-  saveTeamSettings: (body: TeamSettings) =>
+  saveTeamSettings: (body: TeamSettings | Partial<TeamSettings>) =>
     request<TeamSettings>("/team-settings", {
       method: "PUT",
       body: JSON.stringify(body),

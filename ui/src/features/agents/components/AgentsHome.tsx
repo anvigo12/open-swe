@@ -47,6 +47,7 @@ import {
 } from "@/features/agents/lib/gitPanelPreferences"
 import { useTerminalGroups } from "@/features/agents/lib/terminalGroups"
 import { api } from "@/lib/api"
+import { useModelIdentity } from "@/lib/modelIdentity"
 import { useProfile, useRepos } from "@/lib/profile"
 import { useSession } from "@/lib/session"
 import {
@@ -112,6 +113,7 @@ export function AgentsHome({
     (workspaces.some((env) => env.slug === defaultWorkspaceSlug)
       ? defaultWorkspaceSlug
       : null)
+  const identityVisible = useModelIdentity({ workspace: selectedWorkspace })
   const [submittedDraft, setSubmittedDraft] =
     useState<CreateAgentThreadVariables | null>(null)
   const [panelCollapsed, setPanelCollapsed] = useState(() =>
@@ -573,6 +575,7 @@ export function AgentsHome({
             onLocalWorkspaceModeChange={selectLocalWorkspaceMode}
             planMode={planMode}
             onPlanModeChange={runTarget === "cloud" ? setPlanMode : undefined}
+            concealAutoModel={!identityVisible}
             workspaces={workspaces}
             selectedWorkspace={selectedWorkspace}
             onWorkspaceChange={

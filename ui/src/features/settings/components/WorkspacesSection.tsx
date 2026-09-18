@@ -1,12 +1,21 @@
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
 
-import { SettingsSection } from "@/components/AppShell"
+import { SettingsRow, SettingsSection } from "@/components/AppShell"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   api,
   type WorkspaceOption,
   type WorkspaceRefreshStatus,
   type WorkspaceRefreshStep,
+  type WorkspaceSettingsView,
 } from "@/lib/api"
 import { formatRelativeTime } from "@/lib/utils"
 
@@ -73,6 +82,71 @@ function RefreshSteps({ steps }: { steps: Array<WorkspaceRefreshStep> }) {
   )
 }
 
+type IdentityMode = "inherit" | "shown" | "hidden"
+
+function identityMode(override: boolean | null | undefined): IdentityMode {
+  if (override === true) return "shown"
+  if (override === false) return "hidden"
+  return "inherit"
+}
+
+function identityModeValue(mode: IdentityMode): boolean | null {
+  if (mode === "shown") return true
+  if (mode === "hidden") return false
+  return null
+}
+
+function WorkspaceModelIdentityRow({ slug }: { slug: string }) {
+  const qc = useQueryClient()
+  const queryKey = ["workspace-settings", slug] as const
+  const settings = useQuery({
+    queryKey,
+    queryFn: () => api.getWorkspaceSettings(slug),
+  })
+  const [error, setError] = useState<string | null>(null)
+
+  const save = useMutation({
+    mutationFn: (mode: IdentityMode) =>
+      api.saveWorkspaceSettings(slug, {
+        show_model_identity: identityModeValue(mode),
+      }),
+    onSuccess: (saved: WorkspaceSettingsView) => {
+      qc.setQueryData(queryKey, saved)
+      qc.invalidateQueries({ queryKey: ["modelIdentity"] })
+      setError(null)
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+
+  const mode = identityMode(settings.data?.overrides.show_model_identity)
+
+  return (
+    <>
+      <SettingsRow
+        label="Show model identity"
+        description={`Inherit follows the instance default (currently ${settings.data?.effective.show_model_identity === false ? "hidden" : "shown"}). Hidden workspaces show an anonymous auto selection; a manual model pick is always shown.`}
+        control={
+          <Select
+            value={mode}
+            onValueChange={(next) => save.mutate(next as IdentityMode)}
+            disabled={!settings.data || save.isPending}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">Inherit instance</SelectItem>
+              <SelectItem value="shown">Shown</SelectItem>
+              <SelectItem value="hidden">Hidden</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </>
+  )
+}
+
 function WorkspaceRow({
   workspace,
   isDefault,
@@ -82,6 +156,7 @@ function WorkspaceRow({
   isDefault: boolean
   isAdmin: boolean
 }) {
+  const [expanded, setExpanded] = useState(false)
   const status = workspace.refresh_status ?? "never"
   const when = refreshedAt(workspace.refresh_finished_at)
   const log = workspace.refresh_log_excerpt
@@ -104,11 +179,28 @@ function WorkspaceRow({
             {detail}
           </span>
         </div>
-        <span className={`text-xs sm:shrink-0 ${REFRESH_CLASS[status]}`}>
-          {refreshLabel(status, workspace.refresh_kind)}
-          {status !== "refreshing" && when ? ` ${when}` : ""}
+        <span className="flex items-center gap-3 sm:shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="cursor-pointer text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {expanded ? "Hide settings" : "Settings"}
+            </button>
+          )}
+          <span className={`text-xs ${REFRESH_CLASS[status]}`}>
+            {refreshLabel(status, workspace.refresh_kind)}
+            {status !== "refreshing" && when ? ` ${when}` : ""}
+          </span>
         </span>
       </div>
+      {isAdmin && expanded && (
+        <div className="rounded-md border border-border">
+          <WorkspaceModelIdentityRow slug={workspace.slug} />
+        </div>
+      )}
       {steps.length > 0 && <RefreshSteps steps={steps} />}
       {workspace.refresh_error && (
         <p className="text-xs/relaxed text-destructive">

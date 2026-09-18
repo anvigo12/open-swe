@@ -1,7 +1,13 @@
 /** @vitest-environment jsdom */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { cleanup, render, screen } from "@testing-library/react"
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { WorkspacesSection } from "./WorkspacesSection"
@@ -67,7 +73,9 @@ describe("WorkspacesSection", () => {
     expect(screen.getByText(/Refresh failed/)).toBeTruthy()
     expect(screen.getByText("setup script exited 1")).toBeTruthy()
     expect(screen.getByText("Refresh log")).toBeTruthy()
-    expect(view.container.querySelector("button, input, textarea")).toBeNull()
+    expect(
+      view.container.querySelector("input, textarea, [role='combobox']")
+    ).toBeNull()
   })
 
   it("never renders a refresh log for non-admins, even if one arrives", async () => {
@@ -131,5 +139,75 @@ describe("WorkspacesSection", () => {
       await screen.findByText("No workspaces are configured.")
     ).toBeTruthy()
     expect(screen.getByText(/ask a workspace admin/)).toBeTruthy()
+  })
+
+  it("lets an admin override model identity per workspace", async () => {
+    vi.spyOn(api, "listWorkspaceOptions").mockResolvedValue({
+      default_slug: "default",
+      workspaces: [
+        {
+          slug: "oss",
+          name: "OSS",
+          repos: [],
+          slack_channel_ids: [],
+          is_default: false,
+          has_snapshot: true,
+        },
+      ],
+    })
+    vi.spyOn(api, "getWorkspaceSettings").mockResolvedValue({
+      effective: { show_model_identity: true } as never,
+      overrides: {},
+    })
+    const save = vi.spyOn(api, "saveWorkspaceSettings").mockResolvedValue({
+      effective: { show_model_identity: false } as never,
+      overrides: { show_model_identity: false },
+    })
+
+    renderSection(true)
+    fireEvent.click(await screen.findByRole("button", { name: "Settings" }))
+    const combobox = await waitFor(async () => {
+      const el = await screen.findByRole("combobox")
+      if (el.hasAttribute("disabled")) throw new Error("select still disabled")
+      return el
+    })
+    fireEvent.click(combobox)
+    await waitFor(() =>
+      expect(combobox.getAttribute("aria-expanded")).toBe("true")
+    )
+    const hidden = await waitFor(() => {
+      const items = document.querySelectorAll("[role='option']")
+      const last = items[items.length - 1]
+      if (!last) throw new Error("select options not open")
+      return last
+    })
+    fireEvent.pointerMove(hidden)
+    fireEvent.pointerDown(hidden, { button: 0 })
+    fireEvent.pointerUp(hidden, { button: 0 })
+    fireEvent.click(hidden)
+
+    await waitFor(() => expect(save).toHaveBeenCalled())
+    expect(save).toHaveBeenCalledWith("oss", { show_model_identity: false })
+  })
+
+  it("hides the per-workspace settings from non-admins", async () => {
+    vi.spyOn(api, "listWorkspaceOptions").mockResolvedValue({
+      default_slug: "default",
+      workspaces: [
+        {
+          slug: "oss",
+          name: "OSS",
+          repos: [],
+          slack_channel_ids: [],
+          is_default: false,
+          has_snapshot: true,
+        },
+      ],
+    })
+
+    renderSection(false)
+
+    expect(await screen.findByText("OSS")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Settings" })).toBeNull()
   })
 })
