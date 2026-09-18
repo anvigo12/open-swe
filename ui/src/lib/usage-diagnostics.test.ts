@@ -46,7 +46,8 @@ describe("buildUsageDiagnostics", () => {
   it("carries only allowlisted displayed state", () => {
     const result = buildUsageDiagnostics({
       period: "30d",
-      reports: [metadata],
+      reports: [metadata, { ...metadata, as_of: "2026-09-11T12:05:00Z" }],
+      reportServerAsOf: metadata.as_of,
       reportFetchedAt: "2026-09-11T12:01:30Z",
       reportRefreshError: null,
       buildInfo: metadata.build_info ?? null,
@@ -79,6 +80,8 @@ describe("buildUsageDiagnostics", () => {
     expect(build.dashboard?.commit).toBe("def456")
 
     const serialized = JSON.stringify(result)
+    // A fresher leaderboard report must not leak into the PR report's fields.
+    expect(serialized).not.toContain("2026-09-11T12:05:00Z")
     for (const forbidden of [
       "unavailable_thread_ids",
       "thread",
@@ -96,6 +99,7 @@ describe("buildUsageDiagnostics", () => {
     const result = buildUsageDiagnostics({
       period: "7d",
       reports: [],
+      reportServerAsOf: null,
       reportFetchedAt: null,
       reportRefreshError: { status: 503 },
       buildInfo: null,
@@ -127,6 +131,7 @@ describe("buildUsageDiagnostics", () => {
         reports: [
           { ...metadata, has_pending_events: pending, has_failed_events: failed },
         ],
+        reportServerAsOf: metadata.as_of,
         reportFetchedAt: null,
         reportRefreshError: null,
         buildInfo: null,

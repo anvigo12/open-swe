@@ -33,6 +33,8 @@ export interface UsageDiagnosticsInput {
   period: UsageLeaderboardPeriod
   /** Reports the panel currently shows, from either endpoint. */
   reports: AnalyticsMetadata[]
+  /** The PR report's own server-side as_of; never another report's. */
+  reportServerAsOf: string | null
   /** When this browser last received the PR report, if ever. */
   reportFetchedAt: string | null
   reportRefreshError: { status: number } | null
@@ -77,7 +79,7 @@ export function buildUsageDiagnostics(
       : "unavailable_from_backend",
     pr_report: {
       fetched_at: input.reportFetchedAt,
-      server_as_of: latest?.as_of ?? null,
+      server_as_of: input.reportServerAsOf,
       last_refresh_failed: input.reportRefreshError != null,
       last_refresh_error_status: input.reportRefreshError?.status ?? null,
     },

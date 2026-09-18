@@ -408,6 +408,7 @@ function UsageAnalyticsPeriod({
         onRefresh={refreshNow}
         period={activePeriod}
         reportFetchedAt={report.data?.fetchedAt ?? null}
+        reportServerAsOf={report.data?.payload.as_of ?? null}
         reportRefreshError={report.isError && !report.data ? null : reportError}
         buildInfo={normalizeBuildInfo(report.data?.payload.build_info)}
         apiBaseUrl={apiBaseUrl}
@@ -422,6 +423,7 @@ function AnalyticsCoverage({
   onRefresh,
   period,
   reportFetchedAt,
+  reportServerAsOf,
   reportRefreshError,
   buildInfo,
   apiBaseUrl,
@@ -432,6 +434,8 @@ function AnalyticsCoverage({
   period: UsageLeaderboardPeriod
   /** When this browser last received the PR report; separate from the server-side `as_of`. */
   reportFetchedAt: string | null
+  /** The PR report's own server-side as_of; never another report's. */
+  reportServerAsOf: string | null
   /** Failed manual refresh while the last good report stays on screen. */
   reportRefreshError: ApiError | null
   /** Backend and dashboard bundle identifiers, or null on a backend too old to send them. */
@@ -476,6 +480,7 @@ function AnalyticsCoverage({
       buildUsageDiagnostics({
         period,
         reports,
+        reportServerAsOf,
         reportFetchedAt,
         reportRefreshError,
         buildInfo,
@@ -538,9 +543,15 @@ function AnalyticsCoverage({
         </summary>
         <div className="space-y-1 border-t border-border px-4 py-3 text-muted-foreground">
           <p>
-            Period: {PERIOD_LABELS[period]} · Reports checked{" "}
-            {new Date(latest.as_of).toLocaleString()} (server). PR report last
-            fetched by this browser:{" "}
+            Period: {PERIOD_LABELS[period]} · PR report as of{" "}
+            {reportServerAsOf ? (
+              <time dateTime={reportServerAsOf}>
+                {new Date(reportServerAsOf).toLocaleString()}
+              </time>
+            ) : (
+              "Unavailable"
+            )}{" "}
+            (server); last fetched by this browser:{" "}
             {reportFetchedAt
               ? new Date(reportFetchedAt).toLocaleString()
               : "Unavailable"}
