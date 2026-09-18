@@ -34,12 +34,9 @@ describe("metricAvailability", () => {
     [true, null, { state: "no_valid_samples" }],
     [true, 0, { state: "numeric", value: 0 }],
     [true, 3600, { state: "numeric", value: 3600 }],
-  ] as const)(
-    "supported=%s value=%s is %o",
-    (supported, value, expected) => {
-      expect(metricAvailability(supported, value)).toEqual(expected)
-    }
-  )
+  ] as const)("supported=%s value=%s is %o", (supported, value, expected) => {
+    expect(metricAvailability(supported, value)).toEqual(expected)
+  })
 })
 
 describe("buildUsageDiagnostics", () => {
@@ -129,7 +126,11 @@ describe("buildUsageDiagnostics", () => {
       buildUsageDiagnostics({
         period: "7d",
         reports: [
-          { ...metadata, has_pending_events: pending, has_failed_events: failed },
+          {
+            ...metadata,
+            has_pending_events: pending,
+            has_failed_events: failed,
+          },
         ],
         reportServerAsOf: metadata.as_of,
         reportFetchedAt: null,

@@ -629,9 +629,7 @@ function avgDeliveryAvailability(
     return null
   }
   const cohorts = payload.cohorts
-  const supported = cohorts.some(
-    (cohort) => "avg_delivery_seconds" in cohort
-  )
+  const supported = cohorts.some((cohort) => "avg_delivery_seconds" in cohort)
   const values = cohorts
     .map((cohort) =>
       "avg_delivery_seconds" in cohort ? cohort.avg_delivery_seconds : null
