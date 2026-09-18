@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, ApiError } from "@/lib/api"
 import { RequireLogin } from "@/lib/auth-redirect"
@@ -159,6 +160,8 @@ export function UsageAnalytics({
   isAdmin: boolean
 }) {
   const [leaderboardPageSize, setLeaderboardPageSize] = useState(10)
+  // Kept above the period-keyed subtree so the choice survives period changes.
+  const [showSmallSamples, setShowSmallSamples] = useState(false)
 
   return (
     <UsageAnalyticsPeriod
@@ -167,6 +170,8 @@ export function UsageAnalytics({
       login={login}
       isAdmin={isAdmin}
       pageSize={leaderboardPageSize}
+      showSmallSamples={showSmallSamples}
+      onShowSmallSamplesChange={setShowSmallSamples}
       onPageSizeChange={setLeaderboardPageSize}
     />
   )
@@ -177,12 +182,16 @@ function UsageAnalyticsPeriod({
   login,
   isAdmin,
   pageSize: leaderboardPageSize,
+  showSmallSamples,
+  onShowSmallSamplesChange,
   onPageSizeChange: setLeaderboardPageSize,
 }: {
   period: UsageLeaderboardPeriod
   login: string
   isAdmin: boolean
   pageSize: number
+  showSmallSamples: boolean
+  onShowSmallSamplesChange: (show: boolean) => void
   onPageSizeChange: (pageSize: number) => void
 }) {
   const [leaderboardPage, setLeaderboardPage] = useState(1)
@@ -273,7 +282,11 @@ function UsageAnalyticsPeriod({
 
   return (
     <>
-      <PRMergeRateSection report={report} />
+      <PRMergeRateSection
+        report={report}
+        showSmallSamples={showSmallSamples}
+        onShowSmallSamplesChange={onShowSmallSamplesChange}
+      />
 
       <SettingsSection
         title="Agent leaderboard"
@@ -550,23 +563,39 @@ function usePRMergeRateReport(
   })
 }
 
+const SMALL_SAMPLE_MIN = 5
+
 function PRMergeRateSection({
   report,
+  showSmallSamples,
+  onShowSmallSamplesChange,
 }: {
   report: ReturnType<typeof usePRMergeRateReport>
+  showSmallSamples: boolean
+  onShowSmallSamplesChange: (show: boolean) => void
 }) {
   const data = report.isError ? undefined : report.data
   const emptyMessage =
     data?.status === "not_started"
       ? "No analytics records have been captured since the reporting cutover yet."
-      : data?.status === "suppressed"
-        ? "PR groups in this period are too small to show under the privacy threshold."
-        : "No PRs have been recorded for this period yet."
+      : "No PRs have been recorded for this period yet."
 
   return (
     <SettingsSection
       title="PR outcomes"
       description="Outcomes for PRs opened during the selected period."
+      action={
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch
+            aria-label="Show small samples"
+            checked={showSmallSamples}
+            onCheckedChange={onShowSmallSamplesChange}
+          />
+          <span aria-hidden="true">
+            Show small samples (&lt;{SMALL_SAMPLE_MIN} PRs)
+          </span>
+        </span>
+      }
     >
       {report.isPending ? (
         <div
@@ -597,6 +626,8 @@ function PRMergeRateSection({
           key={data.period}
           cohorts={data.cohorts}
           maturityDays={data.maturity_days}
+          showSmallSamples={showSmallSamples}
+          onShowSmallSamples={() => onShowSmallSamplesChange(true)}
         />
       ) : (
         <p
@@ -680,12 +711,10 @@ function PRMergeRateSection({
               subagents, or later runs, so these rates do not measure one
               model's independent success.
             </p>
-            {data.suppression_threshold > 1 ? (
-              <p>
-                Groups with fewer than {data.suppression_threshold} PRs are
-                hidden for privacy.
-              </p>
-            ) : null}
+            <p>
+              Percentages from groups with few PRs swing on a single outcome;
+              read them as unstable until the group grows.
+            </p>
           </div>
         </details>
       ) : null}
@@ -757,19 +786,63 @@ function AvgTimeToPR({ cohort }: { cohort: PRMergeRateCohort }) {
 function PRMergeRateTable({
   cohorts,
   maturityDays,
+  showSmallSamples,
+  onShowSmallSamples,
 }: {
   cohorts: PRMergeRateCohort[]
   maturityDays: number
+  showSmallSamples: boolean
+  onShowSmallSamples: () => void
 }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const pageCount = Math.max(1, Math.ceil(cohorts.length / pageSize))
+  const filtered: Array<PRMergeRateCohort & { partial_efforts: boolean }> =
+    cohorts.flatMap((cohort) => {
+      if (showSmallSamples) {
+        return [{ ...cohort, partial_efforts: false }]
+      }
+      if (cohort.cohort_size < SMALL_SAMPLE_MIN) {
+        return []
+      }
+      const efforts = cohort.efforts.filter(
+        (effort) => effort.cohort_size >= SMALL_SAMPLE_MIN
+      )
+      return [
+        {
+          ...cohort,
+          efforts,
+          partial_efforts: efforts.length < cohort.efforts.length,
+        },
+      ]
+    })
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, pageCount)
-  const rows = cohorts.slice(
+  const rows = filtered.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   )
+
+  if (!filtered.length) {
+    return (
+      <div
+        className="space-y-2 p-6 text-center text-xs text-muted-foreground"
+        role="status"
+      >
+        <p>
+          Only PR groups with fewer than {SMALL_SAMPLE_MIN} PRs are recorded for
+          this period.
+        </p>
+        <button
+          type="button"
+          className="rounded-sm underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          onClick={onShowSmallSamples}
+        >
+          Show small samples
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -857,11 +930,20 @@ function PRMergeRateTable({
                         />
                       )}
                       <div>
-                        <div className="font-medium">{modelLabel}</div>
+                        <div className="font-medium">
+                          {modelLabel}
+                          {cohort.cohort_size < SMALL_SAMPLE_MIN ? (
+                            <span className="ml-1.5 font-normal text-muted-foreground">
+                              (small sample)
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="text-muted-foreground">
                           {hasMultipleEfforts
-                            ? `All efforts · ${cohort.model_attribution_quality} attribution`
-                            : `${formatEffort(cohort.efforts[0]?.effort)} · ${cohort.model_attribution_quality} attribution`}
+                            ? `${cohort.partial_efforts ? "Shown" : "All"} efforts · ${cohort.model_attribution_quality} attribution`
+                            : cohort.partial_efforts
+                              ? `Shown efforts · ${cohort.model_attribution_quality} attribution`
+                              : `${formatEffort(cohort.efforts[0]?.effort)} · ${cohort.model_attribution_quality} attribution`}
                         </div>
                       </div>
                     </div>
@@ -1023,10 +1105,14 @@ function PRMergeRateCells({
   >
   maturityDays: number
 }) {
+  const smallSample = cohort.cohort_size < SMALL_SAMPLE_MIN
   return (
     <>
       <td className="px-2 py-3 text-right tabular-nums">
         {cohort.cohort_size}
+        {smallSample ? (
+          <span className="ml-1 text-muted-foreground">(small sample)</span>
+        ) : null}
       </td>
       <td className="px-2 py-3 text-right tabular-nums">{cohort.merged}</td>
       <td className="px-2 py-3 text-right tabular-nums">
@@ -1049,9 +1135,18 @@ function PRMergeRateCells({
         </Tooltip>
       </td>
       <td className="px-4 py-3 text-right text-sm font-semibold tabular-nums">
-        {cohort.mature_cohort_merge_share == null
-          ? "—"
-          : formatPercent(cohort.mature_cohort_merge_share)}
+        {cohort.mature_cohort_merge_share == null ? (
+          "—"
+        ) : (
+          <>
+            {formatPercent(cohort.mature_cohort_merge_share)}
+            {smallSample ? (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                (small sample)
+              </span>
+            ) : null}
+          </>
+        )}
       </td>
     </>
   )
