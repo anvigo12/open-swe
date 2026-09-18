@@ -1,3 +1,3 @@
 # Files
 
-- [Focused Validation Strategy](overview.md) - Select the narrowest Python, frontend, or Playwright validation that owns an Open SWE change. This guide explains shared fakes, production-boundary coverage, and focused commands.
+- [Testing strategy and focused validation](overview.md) - Choose the narrowest deterministic Python, frontend, desktop, or end-to-end test that proves an Open SWE behavior. This guide maps test boundaries, shared isolation fixtures, controlled E2E seams, and focused commands.
