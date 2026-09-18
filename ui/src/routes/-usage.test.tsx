@@ -1407,3 +1407,84 @@ it("explains incomplete coverage on focus and removes the indicator when costs r
   expect(screen.queryByRole("button", { name: "Cost incomplete" })).toBeNull()
   client.clear()
 })
+
+function stubClipboard(
+  writeText: (text: string) => Promise<void> = () => Promise.resolve()
+) {
+  const stub = vi.fn().mockImplementation(writeText)
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText: stub },
+  })
+  return stub
+}
+
+it("copies an allowlisted diagnostics snapshot to the clipboard", async () => {
+  const cohort = {
+    model_id: "example-model",
+    model_attribution_quality: "configured",
+    merged: 0,
+    closed_without_merge: 1,
+    mature_pending: 0,
+    waiting: 0,
+    cohort_size: 1,
+    decided_denominator: 1,
+    decided_merge_rate: 0,
+    mature_denominator: 1,
+    mature_cohort_merge_share: 0,
+    avg_merge_seconds: null,
+    efforts: [],
+  } as PRMergeRateCohort
+  vi.spyOn(api, "prMergeRateByModel").mockResolvedValue(
+    report({ ...captured, status: "ready", cohorts: [cohort] })
+  )
+  const writeText = stubClipboard()
+  const client = mountReport()
+  fireEvent.click(await screen.findByText("Details"))
+  const copy = screen.getByRole("button", { name: "Copy diagnostics" })
+  fireEvent.click(copy)
+  expect(
+    await screen.findByText("Diagnostics copied to clipboard.")
+  ).toBeTruthy()
+
+  expect(writeText).toHaveBeenCalledTimes(1)
+  const text = writeText.mock.calls[0]?.[0] as string
+  const copied = JSON.parse(text)
+  expect(copied.report).toBe("open-swe-analytics-diagnostics")
+  expect(copied.period).toBe("30d")
+  expect(copied.pr_report.fetched_at).toBe(FETCHED_AT)
+  expect(copied.pr_report.server_as_of).toBe(captured.as_of)
+  expect(copied.event_processing.status).toBe("pending")
+  expect(copied.event_processing.reporting_since).toBe(
+    captured.reporting_cutover_at
+  )
+  expect(copied.metrics.avg_delivery_seconds).toEqual({
+    state: "unsupported_by_backend",
+  })
+  // Nothing beyond the allowlisted display state leaves the page.
+  expect(text).not.toContain("unavailable_thread_ids")
+  expect(text).not.toContain("login")
+  expect(text).not.toContain("thread")
+  client.clear()
+})
+
+it("copies diagnostics from the keyboard and reports a denied clipboard", async () => {
+  vi.spyOn(api, "prMergeRateByModel").mockResolvedValue(report(captured))
+  const writeText = stubClipboard(() =>
+    Promise.reject(new DOMException("denied", "NotAllowedError"))
+  )
+  const client = mountReport()
+  fireEvent.click(await screen.findByText("Details"))
+  const copy = screen.getByRole("button", { name: "Copy diagnostics" })
+  act(() => copy.focus())
+  expect(document.activeElement).toBe(copy)
+  fireEvent.keyDown(copy, { key: "Enter" })
+  fireEvent.click(copy)
+  expect(
+    await screen.findByText(
+      "Clipboard unavailable. Check the browser's clipboard permission."
+    )
+  ).toBeTruthy()
+  expect(writeText).toHaveBeenCalled()
+  client.clear()
+})

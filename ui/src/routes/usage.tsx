@@ -5,6 +5,7 @@ import {
   CaretDownIcon,
   CheckCircleIcon,
   ClockCountdownIcon,
+  CopyIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react"
 import {
@@ -43,6 +44,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, ApiError, describeApiBase, normalizeBuildInfo } from "@/lib/api"
 import { RequireLogin } from "@/lib/auth-redirect"
 import { safeModelLabel } from "@/lib/modelLabel"
+import {
+  buildUsageDiagnostics,
+  metricAvailability,
+  type MetricAvailability,
+} from "@/lib/usage-diagnostics"
 import { useSession } from "@/lib/session"
 
 export const Route = createFileRoute("/usage")({
@@ -462,6 +468,31 @@ function AnalyticsCoverage({
         }
   const StatusIcon = status.icon
   const api = describeApiBase(apiBaseUrl)
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "denied">(
+    "idle"
+  )
+  const copyDiagnostics = async () => {
+    const text = JSON.stringify(
+      buildUsageDiagnostics({
+        period,
+        reports,
+        reportFetchedAt,
+        reportRefreshError,
+        buildInfo,
+        apiBaseUrl,
+        avgDeliverySeconds: avgDeliveryAvailability(reports),
+      }),
+      null,
+      2
+    )
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyState("copied")
+    } catch {
+      setCopyState("denied")
+    }
+    setTimeout(() => setCopyState("idle"), 2000)
+  }
 
   return (
     <div role="status" aria-label="Analytics coverage">
@@ -546,10 +577,53 @@ function AnalyticsCoverage({
             API: {api.origin ?? "same origin"} {api.path}
           </p>
           <BuildIdentityDetails buildInfo={buildInfo} />
+          <p className="flex items-center gap-2 pt-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+              onClick={(event) => {
+                event.preventDefault()
+                void copyDiagnostics()
+              }}
+            >
+              <CopyIcon aria-hidden="true" className="size-3.5" />
+              Copy diagnostics
+            </Button>
+            <span aria-live="polite" role="status">
+              {copyState === "copied"
+                ? "Diagnostics copied to clipboard."
+                : copyState === "denied"
+                  ? "Clipboard unavailable. Check the browser's clipboard permission."
+                  : null}
+            </span>
+          </p>
         </div>
       </details>
     </div>
   )
+}
+
+/** Delivery-timing availability over the cohorts the PR report currently shows. */
+function avgDeliveryAvailability(
+  reports: AnalyticsMetadata[]
+): MetricAvailability | null {
+  const cohorts = reports.flatMap((report) =>
+    "cohorts" in report && Array.isArray(report.cohorts)
+      ? (report.cohorts as PRMergeRateCohort[])
+      : []
+  )
+  if (!cohorts.length) return null
+  const supported = cohorts.some(
+    (cohort) => "avg_delivery_seconds" in cohort
+  )
+  const values = cohorts
+    .map((cohort) =>
+      "avg_delivery_seconds" in cohort ? cohort.avg_delivery_seconds : null
+    )
+    .filter((value): value is number => typeof value === "number")
+  return metricAvailability(supported, values[0] ?? null)
 }
 
 function IdentityValue({ value }: { value: string | null | undefined }) {
