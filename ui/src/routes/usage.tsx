@@ -21,6 +21,7 @@ import type {
   AnalyticsMetadata,
   BuildInfo,
   PRMergeRateCohort,
+  PRMergeRatePayload,
   PRMergeRateResponse,
   ReviewerStatsPayload,
   SortDirection,
@@ -404,6 +405,7 @@ function UsageAnalyticsPeriod({
       </SettingsSection>
       <AnalyticsCoverage
         reports={metadata}
+        reportPayload={report.data?.payload ?? null}
         refreshing={refreshing}
         onRefresh={refreshNow}
         period={activePeriod}
@@ -419,6 +421,7 @@ function UsageAnalyticsPeriod({
 
 function AnalyticsCoverage({
   reports,
+  reportPayload,
   refreshing,
   onRefresh,
   period,
@@ -429,6 +432,8 @@ function AnalyticsCoverage({
   apiBaseUrl,
 }: {
   reports: AnalyticsMetadata[]
+  /** The retained PR report payload; survives a failed refresh even when `reports` excludes it. */
+  reportPayload: PRMergeRatePayload | null
   refreshing: boolean
   onRefresh: () => void
   period: UsageLeaderboardPeriod
@@ -485,7 +490,7 @@ function AnalyticsCoverage({
         reportRefreshError,
         buildInfo,
         apiBaseUrl,
-        avgDeliverySeconds: avgDeliveryAvailability(reports),
+        avgDeliverySeconds: avgDeliveryAvailability(reportPayload),
       }),
       null,
       2
@@ -616,16 +621,14 @@ function AnalyticsCoverage({
   )
 }
 
-/** Delivery-timing availability over the cohorts the PR report currently shows. */
+/** Delivery-timing availability of the retained PR report, even while a refresh fails. */
 function avgDeliveryAvailability(
-  reports: AnalyticsMetadata[]
+  payload: PRMergeRatePayload | null
 ): MetricAvailability | null {
-  const cohorts = reports.flatMap((report) =>
-    "cohorts" in report && Array.isArray(report.cohorts)
-      ? (report.cohorts as PRMergeRateCohort[])
-      : []
-  )
-  if (!cohorts.length) return null
+  if (!payload || payload.status !== "ready" || !payload.cohorts.length) {
+    return null
+  }
+  const cohorts = payload.cohorts
   const supported = cohorts.some(
     (cohort) => "avg_delivery_seconds" in cohort
   )
