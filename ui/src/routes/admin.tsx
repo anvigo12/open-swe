@@ -31,6 +31,7 @@ import {
 import { dashboardApiBase } from "@/lib/api-base"
 import { AllowedSlackBotsSection } from "@/features/settings/components/AllowedSlackBotsSection"
 import { ExpeditedReviewSection } from "@/features/settings/components/ExpeditedReviewSection"
+import { LeaderboardPrivacySection } from "@/features/settings/components/LeaderboardPrivacySection"
 import { MCPConnectionsSection } from "@/features/settings/components/MCPConnectionsSection"
 import { RepoSelector } from "@/features/settings/components/RepoSelector"
 import { useRepos } from "@/lib/profile"
@@ -81,6 +82,8 @@ function AdminPage() {
       <FableSection />
 
       <ExpeditedReviewSection />
+
+      <LeaderboardPrivacySection />
 
       <TriggerReviewSection />
 

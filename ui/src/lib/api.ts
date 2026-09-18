@@ -210,6 +210,8 @@ export interface TeamSettings {
   fable_enabled?: boolean
   /** Experimental: approve and merge tiny PRs from their Slack thread. Off by default. */
   expedited_review_enabled?: boolean
+  /** Instance-level leaderboard identity policy; on by default. */
+  usage_leaderboard_privacy_enabled?: boolean
   org_guidelines?: string | null
   default_agent_model?: string | null
   default_agent_reasoning_effort?: string | null
@@ -377,6 +379,12 @@ export interface UsageLeaderboardPayload extends AnalyticsMetadata {
   current_user_rank: number | null
   generated_at_ms: number | null
   reviewer_stats: ReviewerStatsPayload
+  /** The instance identity policy in effect for this response. */
+  usage_leaderboard_privacy_enabled: boolean
+}
+
+export interface UsageLeaderboardPrivacy {
+  usage_leaderboard_privacy_enabled: boolean
 }
 
 export interface PRMergeRateEffort {
@@ -988,6 +996,13 @@ export const api = {
   listWorkspaceOptions: () =>
     request<WorkspaceOptionList>("/workspaces/options"),
   getTeamSettings: () => request<TeamSettings>("/team-settings"),
+  getUsageLeaderboardPrivacy: () =>
+    request<UsageLeaderboardPrivacy>("/settings/usage-leaderboard-privacy"),
+  saveUsageLeaderboardPrivacy: (enabled: boolean) =>
+    request<UsageLeaderboardPrivacy>("/settings/usage-leaderboard-privacy", {
+      method: "PUT",
+      body: JSON.stringify({ usage_leaderboard_privacy_enabled: enabled }),
+    }),
   listSlackBots: () => request<SlackBotOption[]>("/slack/bots"),
   listAllowedSlackBots: () => request<AllowedSlackBot[]>("/slack/allowed-bots"),
   allowSlackBot: (body: { bot_id: string }) =>
